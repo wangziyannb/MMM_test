@@ -146,7 +146,6 @@ class Text2MotionDataset(data.Dataset):
         return len(self.data_dict) - self.pointer
 
     def __getitem__(self, item):
-        print('=== Start of getitem ===')
         idx = self.pointer + item
         name = self.name_list[idx]
         data = self.data_dict[name]
