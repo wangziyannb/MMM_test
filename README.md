@@ -28,7 +28,7 @@ If our project is helpful for your research, please consider citing :
 ## Getting Started
 ### 1. Setup Env
 ```
-conda env create -f environment.yml
+conda env create -f environment.yaml
 conda activate MMM
 ```
 
@@ -37,8 +37,7 @@ If you have a problem with the conflict, you can install them manually
 conda create --name MMM
 conda activate MMM
 conda install plotly tensorboard scipy matplotlib pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
-pip install git+https://github.com/openai/CLIP.git einops gdown
-pip install --upgrade nbformat
+pip install openai-clip einops gdown nbformat
 ```
 
 ### 2. Get Data

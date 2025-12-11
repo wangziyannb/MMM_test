@@ -60,8 +60,6 @@ class Text2MotionDataset(data.Dataset):
         min_motion_len = 40 if self.dataset_name =='t2m' else 24
         # min_motion_len = 64
 
-        joints_num = self.joints_num
-
         data_dict = {}
         id_list = []
         with cs.open(split_file, 'r') as f:
@@ -133,7 +131,7 @@ class Text2MotionDataset(data.Dataset):
     def reset_max_len(self, length):
         assert length <= self.max_motion_length
         self.pointer = np.searchsorted(self.length_arr, length)
-        print("Pointer Pointing at %d"%self.pointer)
+        # print(f'Pointer Pointing at {self.pointer}')
         self.max_length = length
 
     def inv_transform(self, data):
@@ -190,33 +188,25 @@ class Text2MotionDataset(data.Dataset):
         motion = (motion - self.mean) / self.std
 
         if m_length < self.max_motion_length and self.shuffle:
-            motion = np.concatenate([motion,
-                                     np.zeros((self.max_motion_length - m_length, motion.shape[1]))
-                                     ], axis=0)
+            motion = np.concatenate([motion, np.zeros((self.max_motion_length - m_length, motion.shape[1]))], axis=0)
 
         return word_embeddings, pos_one_hots, caption, sent_len, motion, m_length, '_'.join(tokens), name
 
 
-
-
-def DATALoader(dataset_name, is_test,
-                batch_size, w_vectorizer,
-                num_workers = 8, unit_length = 4, shuffle=True) : 
-    
+def DATALoader(dataset_name, is_test, batch_size, w_vectorizer, num_workers=8, unit_length=4, shuffle=True):
     val_loader = torch.utils.data.DataLoader(Text2MotionDataset(dataset_name, is_test, w_vectorizer, unit_length=unit_length, shuffle=shuffle),
-                                              batch_size,
-                                              shuffle = shuffle,
-                                              num_workers=num_workers,
-                                              collate_fn=collate_fn,
-                                              drop_last = True)
-    return val_loader
+                                             batch_size,
+                                             shuffle=shuffle,
+                                             num_workers=num_workers,
+                                             collate_fn=collate_fn,
+                                             drop_last=True)
 
+    return val_loader
 
 def cycle(iterable):
     while True:
         for x in iterable:
             yield x
-
 
 def collate_fn_with_bert(tokenizer, max_t):
 
@@ -232,16 +222,8 @@ def collate_fn_with_bert(tokenizer, max_t):
 
     return collate
 
-
-def DATALoaderNew(dataset_name, is_test,
-               batch_size, w_vectorizer,
-               num_workers=8, unit_length=4, shuffle=True,
-               tokenizer=None, max_t=None):
-
-    if tokenizer is not None:
-        collate_function = collate_fn_with_bert(tokenizer, max_t)
-    else:
-        collate_function = collate_fn
+def DATALoaderNew(dataset_name, is_test, batch_size, w_vectorizer, num_workers=8, unit_length=4, shuffle=True, tokenizer=None, max_t=None):
+    collate_function = collate_fn_with_bert(tokenizer, max_t) if tokenizer is not None else collate_fn
 
     val_loader = torch.utils.data.DataLoader(Text2MotionDataset(dataset_name, is_test, w_vectorizer, unit_length=unit_length, shuffle=shuffle),
                                              batch_size,

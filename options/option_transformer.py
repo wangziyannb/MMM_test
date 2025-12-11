@@ -6,7 +6,6 @@ def get_args_parser():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     ## dataloader
-    
     parser.add_argument('--dataname', type=str, default='t2m', help='dataset directory')
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
     parser.add_argument('--fps', default=[20], nargs="+", type=int, help='frames per second')
@@ -36,7 +35,8 @@ def get_args_parser():
     parser.add_argument('--vq-act', type=str, default='relu', choices = ['relu', 'silu', 'gelu'], help='dataset directory')
 
     ## gpt arch
-    parser.add_argument("--block-size", type=int, default=51, help="seq len")
+    parser.add_argument("--max-t", type=int, default=77, help="maximum length of text")
+    parser.add_argument("--block-size", type=int, default=127, help="seq len")
     parser.add_argument("--embed-dim-gpt", type=int, default=1024, help="embedding dimension")
     parser.add_argument("--clip-dim", type=int, default=512, help="latent dimension in the clip feature")
     parser.add_argument("--num-layers", type=int, default=9, help="nb of transformer layers")
@@ -54,10 +54,10 @@ def get_args_parser():
     parser.add_argument("--resume-trans", type=str, default=None, help='resume gpt pth')
     
     
-    ## output directory 
+    ## output directory
     parser.add_argument('--out-dir', type=str, default='output', help='output directory')
     parser.add_argument('--exp-name', type=str, default='exp_debug', help='name of the experiment, will create a file inside out-dir')
-    parser.add_argument('--vq-name', type=str, default='VQVAE', help='name of the generated dataset .npy, will create a file inside out-dir')
+    parser.add_argument('--vq-name', type=str, default='retrain', help='name of the generated dataset .npy, will create a file inside out-dir')
     ## other
     parser.add_argument('--print-iter', default=200, type=int, help='print frequency')
     parser.add_argument('--eval-iter', default=10000, type=int, help='evaluation frequency')

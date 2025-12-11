@@ -165,9 +165,10 @@ def evaluation_vqvae(out_dir, val_loader, net, logger, writer, nb_iter, best_fid
     net.train()
     return best_fid, best_iter, best_div, best_top1, best_top2, best_top3, best_matching, writer, logger
 
-
 @torch.no_grad()        
-def evaluation_transformer(out_dir, val_loader, net, trans, logger, writer, nb_iter, best_fid, best_iter, best_div, best_top1, best_top2, best_top3, best_matching, clip_model, eval_wrapper, dataname='t2m', draw = True, save = True, savegif=False, num_repeat=1, rand_pos=False, CFG=-1) : 
+def evaluation_transformer(out_dir, val_loader, net, trans, logger, writer, nb_iter,
+                           best_fid, best_iter, best_div, best_top1, best_top2, best_top3, best_matching,
+                           clip_model, eval_wrapper, dataname='t2m', draw = True, save = True, savegif=False, num_repeat=1, rand_pos=False, CFG=-1) :
     if num_repeat < 0:
         is_avg_all = True
         num_repeat = -num_repeat
@@ -359,9 +360,9 @@ def evaluation_transformer(out_dir, val_loader, net, trans, logger, writer, nb_i
     return pred_pose_eval, pose, m_length, clip_text, best_fid, best_iter, best_div, best_top1, best_top2, best_top3, best_matching, multimodality, writer, logger
 
 @torch.no_grad()
-def evaluation_transformer_new(out_dir, val_loader, net, trans, logger, writer, nb_iter,
-                               best_fid, best_iter, best_div, best_top1, best_top2, best_top3, best_matching,
-                               bert, max_m, max_t, eval_wrapper, first, draw=True, save=True, num_repeat=1, rand_pos=False):
+def eval_trans_m(out_dir, val_loader, net, trans, logger, writer, nb_iter,
+                 best_fid, best_iter, best_div, best_top1, best_top2, best_top3, best_matching,
+                 bert, max_m, max_t, eval_wrapper, first, draw=True, save=True, num_repeat=1, rand_pos=False):
     if num_repeat < 0:  # evaluate all generations
         is_avg_all = True
         num_repeat = -num_repeat
@@ -442,9 +443,9 @@ def evaluation_transformer_new(out_dir, val_loader, net, trans, logger, writer, 
     matching_score_pred = matching_score_pred / nb_sample
 
     multimodality = 0
-    motion_multimodality = torch.cat(motion_multimodality, dim=0).cpu().numpy()
-    if num_repeat > 1:
-        multimodality = calculate_multimodality(motion_multimodality, 10)
+    # motion_multimodality = torch.cat(motion_multimodality, dim=0).cpu().numpy()
+    # if num_repeat > 1:
+    #     multimodality = calculate_multimodality(motion_multimodality, 10)
 
     fid = calculate_frechet_distance(gt_mu, gt_cov, mu, cov)
 
@@ -857,8 +858,6 @@ def euclidean_distance_matrix(matrix1, matrix2):
     dists = np.sqrt(d1 + d2 + d3)  # broadcasting
     return dists
 
-
-
 def calculate_top_k(mat, top_k):
     size = mat.shape[0]
     gt_mat = np.expand_dims(np.arange(size), 1).repeat(size, 1)
@@ -872,7 +871,6 @@ def calculate_top_k(mat, top_k):
         top_k_list.append(correct_vec[:, None])
     top_k_mat = np.concatenate(top_k_list, axis=1)
     return top_k_mat
-
 
 def calculate_R_precision(embedding1, embedding2, top_k, sum_all=False):
     dist_mat = euclidean_distance_matrix(embedding1, embedding2)
@@ -894,7 +892,6 @@ def calculate_multimodality(activation, multimodality_times):
     dist = linalg.norm(activation[:, first_dices] - activation[:, second_dices], axis=2)
     return dist.mean()
 
-
 def calculate_diversity(activation, diversity_times):
     assert len(activation.shape) == 2
     assert activation.shape[0] > diversity_times
@@ -904,8 +901,6 @@ def calculate_diversity(activation, diversity_times):
     second_indices = np.random.choice(num_samples, diversity_times, replace=False)
     dist = linalg.norm(activation[first_indices] - activation[second_indices], axis=1)
     return dist.mean()
-
-
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
@@ -943,14 +938,11 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     return (diff.dot(diff) + np.trace(sigma1)
             + np.trace(sigma2) - 2 * tr_covmean)
 
-
-
 def calculate_activation_statistics(activations):
 
     mu = np.mean(activations, axis=0)
     cov = np.cov(activations, rowvar=False)
     return mu, cov
-
 
 def calculate_frechet_feature_distance(feature_list1, feature_list2):
     feature_list1 = np.stack(feature_list1)
