@@ -662,7 +662,7 @@ def eval_trans_t(out_dir, val_loader, net, trans, logger, writer, nb_iter,
         best_bleu4, best_iter = bleu4, nb_iter
 
     if rouge_l > best_rouge_l:
-        msg = f"--> --> \t ROUGE_L Improved from {best_rouge_l:.3f} to {rouge_l:.3f} !!!"
+        msg = f"--> --> \t ROUGE_L Improved from {best_rouge_l:.4f} to {rouge_l:.4f} !!!"
         logger.info(msg)
         best_rouge_l = rouge_l
 
