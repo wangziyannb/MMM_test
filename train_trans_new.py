@@ -277,6 +277,8 @@ for nb_iter in tqdm(range(1, args.total_iter + 1), position=0, leave=True):
         right_seq_masked = compute_result(pred_seq_masked, target, seq_mask_no_end)
         right_seq_masked_t = compute_result(pred_seq_masked_t, input_ids, seq_mask_no_end_t)
 
+        writer.add_scalar('./Loss/loss_t', loss_t, nb_iter)
+        writer.add_scalar('./Loss/loss_m', loss_m, nb_iter)
         writer.add_scalar('./Loss/all', loss, nb_iter)
         writer.add_scalar('./ACC/every_motion', right_seq_masked * 100 / seq_mask_no_end.sum(), nb_iter)
         writer.add_scalar('./ACC/every_text', right_seq_masked_t * 100 / seq_mask_no_end_t.sum(), nb_iter)
@@ -292,7 +294,7 @@ for nb_iter in tqdm(range(1, args.total_iter + 1), position=0, leave=True):
 
     if nb_iter == 0 or nb_iter % args.eval_iter == 0 or nb_iter == args.total_iter:
         if nb_iter == args.total_iter:
-            num_repeat = -3
+            num_repeat = -30
             rand_pos = True
             val_loader = dataset_TM_eval.DATALoaderNew(args.dataname, True, 32, w_vectorizer,
                                                        tokenizer=tokenizer, max_t=max_t)
