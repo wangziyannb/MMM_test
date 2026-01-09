@@ -148,8 +148,12 @@ def masking(ids, seq_lens: torch.Tensor, batch_size, max_len, mask_id, probs: li
     input_indices = mask * ids + (1 - mask) * r_indices
 
     # Step 2: Time-step masking
-    rand_mask_probs = torch.zeros(batch_size, device=seq_lens.device).float().uniform_(probs[0], probs[1])
-    num_token_masked = (seq_lens * rand_mask_probs).round().clamp(min=1)
+    if probs[0] == probs[1] == 0:
+        num_token_masked = torch.zeros_like(seq_lens)
+    else:
+        rand_mask_probs = torch.zeros(batch_size, device=seq_lens.device).float().uniform_(probs[0], probs[1])
+        num_token_masked = (seq_lens * rand_mask_probs).round().clamp(min=1)
+
     batch_randperm = torch.rand((batch_size, max_len), device=ids.device) - seq_mask_no_end.int()
     batch_randperm = batch_randperm.argsort(dim=-1)
     mask_token = batch_randperm < rearrange(num_token_masked, 'b -> b 1')
@@ -334,6 +338,6 @@ def train(first_modality, mask_probs):
 # Training Step 1: mix training
 bests = train(
     first_modality='motion',  # "motion" first or "text" first
-    mask_probs=((0.5, 1), (0.0001, 1))
+    mask_probs=((0.5, 1), (0.0001, 1))  # (0, 0) for no mask
     # ((prob_lower_bound_m, prob_upper_bound_m), (prob_lower_bound_t, prob_upper_bound_t))
 )
