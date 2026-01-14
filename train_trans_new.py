@@ -212,6 +212,8 @@ def train(first_modality, mask_probs):
     best_bleu3 = 0.
     best_bleu4 = 0.
     best_rouge_l = 0.
+    best_cider = 0.
+    best_bert_f1 = 0.
 
     for nb_iter in tqdm(range(1, args.total_iter + 1), position=0, leave=True):
         batch = next(train_loader_iter)
@@ -317,11 +319,13 @@ def train(first_modality, mask_probs):
                 best_matching=best_matching,
                 num_repeat=num_repeat, rand_pos=rand_pos)
 
-            best_iter_t, best_bleu1, best_bleu2, best_bleu3, best_bleu4, best_rouge_l = eval_trans_t(
+            best_iter_t, best_bleu1, best_bleu2, best_bleu3, best_bleu4, best_rouge_l, best_cider, best_bert_f1 = eval_trans_t(
                 args.out_dir, val_loader, net, trans_encoder, logger, writer, nb_iter,
-                eval_wrapper, tokenizer, special_ids_t, invalid_ids_t, max_m, args.max_t, first_modality,
-                best_iter=best_iter_t, best_bleu1=best_bleu1, best_bleu2=best_bleu2, best_bleu3=best_bleu3,
-                best_bleu4=best_bleu4, best_rouge_l=best_rouge_l,
+                eval_wrapper, tokenizer, special_ids_t, invalid_ids_t, max_m, args.max_t,
+                first_modality,
+                best_iter=best_iter_t, best_bleu1=best_bleu1, best_bleu2=best_bleu2,
+                best_bleu3=best_bleu3, best_bleu4=best_bleu4, best_rouge_l=best_rouge_l,
+                best_cider=best_cider, best_bert_f1=best_bert_f1,
                 num_repeat=num_repeat, rand_pos=rand_pos)
 
             if nb_iter == args.total_iter:
@@ -334,10 +338,9 @@ def train(first_modality, mask_probs):
                 logger.info(msg_final)
                 break
 
-
 # Training Step 1: mix training
 bests = train(
     first_modality='motion',  # "motion" first or "text" first
-    mask_probs=((0.5, 1), (0.0001, 1))  # (0, 0) for no mask
+    mask_probs=((0, 0), (0.5, 1))
     # ((prob_lower_bound_m, prob_upper_bound_m), (prob_lower_bound_t, prob_upper_bound_t))
 )

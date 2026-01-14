@@ -1,0 +1,3 @@
+nlg_metricverse==0.9.9
+bert_score==0.3.13
+datasets==4.5.0
