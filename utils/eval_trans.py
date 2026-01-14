@@ -581,12 +581,16 @@ def eval_trans_t(out_dir, val_loader, net, trans, logger, writer, nb_iter,
 
         # compute CIDEr using nlgmetricverse (if available)
         if nlg_evaluator is not None:
+            references = [[c] for c in captions]
             # nlg_evaluator returns a dict keyed by metric names
-            _scores = nlg_evaluator(predictions=pred_text, references=captions)
+            _scores = nlg_evaluator(predictions=pred_text, references=references)
             cider_value = _scores["cider"]["score"]
             cider_score += cider_value
         # compute BERT F1 using bert_score (if available)
         if bert_score is not None:
+            pred_text = list(pred_text)
+            captions = list(captions)
+
             P, R, F1 = bert_score(pred_text, captions, lang="en",
                                   rescale_with_baseline=True, idf=True,
                                   verbose=False)
