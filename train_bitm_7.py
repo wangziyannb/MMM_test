@@ -643,6 +643,28 @@ def run_eval_only(cfg, args, modules, model, datamodule, pl_loggers, logger):
     return metrics
 
 
+def load_pretrained_for_training(cfg, model, modules, logger):
+    try:
+        return modules["load_pretrained"](cfg, model, logger)
+    except RuntimeError as exc:
+        message = str(exc)
+        if "Unexpected key(s) in state_dict" not in message or "lm.fake_latent" not in message:
+            raise
+
+        ckpt_path = cfg.TRAIN.PRETRAINED
+        logger.warning(
+            "Strict load found stage1 classifier-free guidance parameter "
+            "`lm.fake_latent`, but the current stage config does not register it. "
+            "Dropping only this key and keeping strict loading for all other weights."
+        )
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        state_dict = dict(ckpt["state_dict"])
+        state_dict.pop("lm.fake_latent", None)
+        model.load_state_dict(state_dict, strict=True)
+        model.epoch = ckpt.get("epoch", -1)
+        return model
+
+
 def main():
     args = parse_args()
     root = require_motiongpt3_root(args.motiongpt3_root)
@@ -703,7 +725,7 @@ def main():
         logger.info("Trainer initialized")
 
     if cfg.TRAIN.PRETRAINED and not args.eval_only:
-        modules["load_pretrained"](cfg, model, logger)
+        load_pretrained_for_training(cfg, model, modules, logger)
     if cfg.TRAIN.PRETRAINED_VAE:
         modules["load_pretrained_vae"](cfg, model, logger)
     else:
