@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks import Callback, RichProgressBar, TQDMProgressBar
 from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument("--cfg", default=None, help="Official MotionGPT3 config path, relative to --motiongpt3-root or absolute.")
     parser.add_argument("--cfg-assets", default="configs/assets.yaml", help="Official MotionGPT3 assets config.")
     parser.add_argument("--nodebug", action="store_true", help="Match official --nodebug.")
+    parser.add_argument("--progress-bar", choices=["official", "tqdm", "none"], default="official",
+                        help="Progress bar style. `official` keeps MotionGPT3 RichProgressBar; `tqdm` is friendlier in PyCharm/remote consoles.")
 
     parser.add_argument("--out-dir", default=str(REPO_ROOT / "output" / "motiongpt3"))
     parser.add_argument("--exp-name", default="motiongpt3_stage2_all_our_eval")
@@ -665,6 +667,19 @@ def load_pretrained_for_training(cfg, model, modules, logger):
         return model
 
 
+def configure_progress_bar(callbacks, mode, logger):
+    if mode == "official":
+        return callbacks
+
+    callbacks = [callback for callback in callbacks if not isinstance(callback, RichProgressBar)]
+    if mode == "tqdm":
+        callbacks.insert(0, TQDMProgressBar(refresh_rate=1))
+        logger.info("Replaced official RichProgressBar with TQDMProgressBar.")
+    else:
+        logger.info("Disabled progress bar callback.")
+    return callbacks
+
+
 def main():
     args = parse_args()
     root = require_motiongpt3_root(args.motiongpt3_root)
@@ -691,6 +706,7 @@ def main():
     callbacks = []
     if not args.eval_only:
         callbacks = modules["build_callbacks"](cfg, logger=logger, phase="train")
+        callbacks = configure_progress_bar(callbacks, args.progress_bar, logger)
         if not args.skip_our_eval:
             callbacks.append(OurMotionTextEvalCallback(cfg, args, logger))
         logger.info("Callbacks initialized")
@@ -719,6 +735,8 @@ def main():
             "deterministic": False,
             "accumulate_grad_batches": cfg.TRAIN.accumulate_grad_batches,
         }
+        if args.progress_bar == "none":
+            trainer_kwargs["enable_progress_bar"] = False
         if not args.keep_official_val:
             trainer_kwargs["limit_val_batches"] = 0
         trainer = pl.Trainer(**trainer_kwargs)
