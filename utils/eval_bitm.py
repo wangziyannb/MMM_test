@@ -199,6 +199,16 @@ def calculate_frechet_feature_distance(feature_list1, feature_list2):
     )
     return dist
 
+
+def _forward_bitm(model, token_ids_t, token_ids_m, seq_mask_t, seq_mask_m, mode=None, motion_ids_for_text=None):
+    if mode is not None and getattr(get_model(model), 'supports_strict_ar', False):
+        kwargs = {'mode': mode}
+        if motion_ids_for_text is not None:
+            kwargs['motion_ids_for_text'] = motion_ids_for_text
+        return model(token_ids_t, token_ids_m, seq_mask_t, seq_mask_m, **kwargs)
+    return model(token_ids_t, token_ids_m, seq_mask_t, seq_mask_m)
+
+
 def inference_t2m(model, lens_m: torch.Tensor, token_ids_t, seq_mask_t, seq_mask_m, seq_mask_no_end_m,
              special_ids_m, max_length, shape, rand_pos=True, token_cond=None, max_steps=10):
     # init sampling score
@@ -240,7 +250,7 @@ def inference_t2m(model, lens_m: torch.Tensor, token_ids_t, seq_mask_t, seq_mask
         sorted_score_indices = sorted_score_indices * select_masked_indices + (last_index * ~select_masked_indices)
         token_ids_m.scatter_(-1, sorted_score_indices, special_ids_m['mask_id'])
 
-        logits = model(token_ids_t, token_ids_m, seq_mask_t, seq_mask_m)
+        logits = _forward_bitm(model, token_ids_t, token_ids_m, seq_mask_t, seq_mask_m, mode='motion')
 
         if rand_pos:
             temperature = 1  # starting_temperature * (steps_until_x0 / timesteps)  # temperature is annealed
@@ -534,11 +544,69 @@ def inference_m2t(model, lens_t: torch.Tensor, token_ids_m, seq_mask_m, seq_mask
 
     return token_ids_t
 
+
+def inference_m2t_ar(model, token_ids_m, seq_mask_m, special_ids_t, max_t, rand_pos=True):
+    batch_size = token_ids_m.shape[0]
+    device = token_ids_m.device
+    bitm = get_model(model)
+    token_ids_t = torch.full(
+        (batch_size, max_t),
+        special_ids_t['pad_id'],
+        dtype=torch.long,
+        device=device
+    )
+    seq_mask_t = torch.zeros((batch_size, max_t), dtype=torch.bool, device=device)
+    token_ids_t[:, 0] = special_ids_t['cls_id']
+    seq_mask_t[:, 0] = True
+    finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
+
+    temperature = 1 if rand_pos else 0
+    use_ar_cache = (
+        getattr(bitm, 'supports_ar_cache', False)
+        and callable(getattr(bitm, 'init_text_ar_cache', None))
+        and callable(getattr(bitm, 'forward_text_ar_cached_step', None))
+    )
+    past_key_values = bitm.init_text_ar_cache(token_ids_m, seq_mask_m, text_len=max_t) if use_ar_cache else None
+    for step in range(max_t - 1):
+        if use_ar_cache:
+            cached_outputs = bitm.forward_text_ar_cached_step(
+                token_ids_t[:, step],
+                text_position=step,
+                motion_mask=seq_mask_m,
+                text_key_mask=seq_mask_t[:, :step + 1],
+                past_key_values=past_key_values
+            )
+            past_key_values = cached_outputs['past_key_values']
+            step_logits = cached_outputs['logits_t']
+        else:
+            logits = _forward_bitm(
+                model,
+                token_ids_t,
+                token_ids_m,
+                seq_mask_t,
+                seq_mask_m,
+                mode='text'
+            )
+            step_logits = logits['logits_t'][:, step, :]
+
+        next_token = gumbel_sample(step_logits, temperature=temperature, dim=-1)
+        next_token = torch.where(finished, torch.full_like(next_token, special_ids_t['pad_id']), next_token)
+
+        next_pos = step + 1
+        token_ids_t[:, next_pos] = next_token
+        seq_mask_t[:, next_pos] = ~finished
+        finished = finished | (next_token == special_ids_t['eos_id'])
+        if finished.all():
+            break
+
+    return token_ids_t
+
+
 @torch.no_grad()
 def eval_bitm_m2t(out_dir, val_loader, bitm, logger, writer, nb_iter, tokenizer, special_ids_t, invalid_ids, max_m, max_t,
                   best_iter=0., best_bleu1=0., best_bleu2=0., best_bleu3=0., best_bleu4=0., best_rouge_l=0.,
                   best_cider=0., best_bert_f1=0.,
-                  draw=True, save=True, num_repeat=1, rand_pos=False):
+                  draw=True, save=True, num_repeat=1, rand_pos=False, autoregressive=False):
     if num_repeat < 0:  # evaluate all generations
         is_avg_all = True
         num_repeat = -num_repeat
@@ -549,6 +617,8 @@ def eval_bitm_m2t(out_dir, val_loader, bitm, logger, writer, nb_iter, tokenizer,
         raise ImportError("BiTM m2t eval now requires nlgmetricverse to match MotionGPT-style NLP metrics.")
     if bert_score is None:
         raise ImportError("BiTM m2t eval now requires bert_score to match MotionGPT-style BERT-F1.")
+    if autoregressive and not getattr(get_model(bitm), 'supports_strict_ar', False):
+        raise ValueError("autoregressive=True requires a strict-AR BiTM model.")
 
     nlg_evaluator = NLGMetricverse([
         load_metric("bleu", resulting_name="bleu_1", compute_kwargs={"max_order": 1}),
@@ -568,27 +638,35 @@ def eval_bitm_m2t(out_dir, val_loader, bitm, logger, writer, nb_iter, tokenizer,
         bs, seq = pose.shape[:2]
         lens_m = torch.ceil(m_length / 4).long()
 
-        # Restore the previous oracle-length evaluation so we can isolate the
-        # metric-protocol change from the generation-length change.
-        t_valid_mask = ~torch.isin(token_ids_t.cuda(), torch.tensor(invalid_ids).cuda())
-        lens_t = t_valid_mask.sum(dim=1)
-
         # Get motion mask
         seq_mask_m = generate_src_mask(max_m, lens_m + 1)
-        seq_mask_eval_t = generate_src_mask(max_t, lens_t + 1)
-        seq_mask_no_end_t = generate_src_mask(max_t, lens_t)
+        if not autoregressive:
+            # Restore the previous oracle-length evaluation so we can isolate the
+            # metric-protocol change from the generation-length change.
+            t_valid_mask = ~torch.isin(token_ids_t.cuda(), torch.tensor(invalid_ids).cuda())
+            lens_t = t_valid_mask.sum(dim=1)
+            seq_mask_eval_t = generate_src_mask(max_t, lens_t + 1)
+            seq_mask_no_end_t = generate_src_mask(max_t, lens_t)
 
         for i in range(num_repeat):
-            index_text = inference_m2t(bitm,
-                                       lens_t=lens_t.cuda(),
-                                       token_ids_m=token_ids_m.cuda(),
-                                       seq_mask_m=seq_mask_m.cuda(),
-                                       seq_mask_t=seq_mask_eval_t.cuda(),
-                                       seq_mask_no_end_t=seq_mask_no_end_t.cuda(),
-                                       special_ids_t=special_ids_t,
-                                       max_length=max_t - 1,
-                                       shape=(bs, max_t),
-                                       rand_pos=rand_pos)  # (bs, max_t)
+            if autoregressive:
+                index_text = inference_m2t_ar(bitm,
+                                              token_ids_m=token_ids_m.cuda(),
+                                              seq_mask_m=seq_mask_m.cuda(),
+                                              special_ids_t=special_ids_t,
+                                              max_t=max_t,
+                                              rand_pos=rand_pos)  # (bs, max_t)
+            else:
+                index_text = inference_m2t(bitm,
+                                           lens_t=lens_t.cuda(),
+                                           token_ids_m=token_ids_m.cuda(),
+                                           seq_mask_m=seq_mask_m.cuda(),
+                                           seq_mask_t=seq_mask_eval_t.cuda(),
+                                           seq_mask_no_end_t=seq_mask_no_end_t.cuda(),
+                                           special_ids_t=special_ids_t,
+                                           max_length=max_t - 1,
+                                           shape=(bs, max_t),
+                                           rand_pos=rand_pos)  # (bs, max_t)
             pred_text = decode_token_ids(index_text, tokenizer, eos_id=special_ids_t['eos_id'])
 
             if i == 0 or is_avg_all:

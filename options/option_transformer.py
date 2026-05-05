@@ -8,6 +8,7 @@ def get_args_parser():
     ## dataloader
     parser.add_argument('--dataname', type=str, default='t2m', help='dataset directory')
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
+    parser.add_argument('--eval-batch-size', default=32, type=int, help='evaluation batch size')
     parser.add_argument('--fps', default=[20], nargs="+", type=int, help='frames per second')
     parser.add_argument('--seq-len', type=int, default=64, help='training motion length')
     
@@ -17,6 +18,8 @@ def get_args_parser():
     parser.add_argument('--lr', default=2e-4, type=float, help='max learning rate')
     parser.add_argument('--lr-scheduler', default=[150000], nargs="+", type=int, help="learning rate schedule (iterations)")
     parser.add_argument('--gamma', default=0.05, type=float, help="learning rate decay")
+    parser.add_argument('--grad-accum-steps', default=1, type=int,
+                        help='number of micro batches to accumulate per optimizer update')
     
     parser.add_argument('--weight-decay', default=1e-6, type=float, help='weight decay') 
     parser.add_argument('--decay-option',default='all', type=str, choices=['all', 'noVQ'], help='disable weight decay on codebook')
@@ -48,6 +51,8 @@ def get_args_parser():
     parser.add_argument("--first-modality", type=str, default='text', help="first modality")
     parser.add_argument("--motion-encoder-layers", type=int, default=2, help="number of motion encoder layers")
     parser.add_argument("--motion-decoder-layers", type=int, default=2, help="number of motion decoder layers")
+    parser.add_argument("--llada-name", type=str, default='GSAI-ML/LLaDA-8B-Base',
+                        help="LLaDA checkpoint used by train_bitm_6")
     parser.add_argument("--min-batch-per-gpu", type=int, default=32,
                         help="only enable DataParallel when batch_size / visible_gpus is at least this value; set 0 to always use all visible GPUs")
     
