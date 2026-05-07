@@ -6,7 +6,10 @@ import models.pos_encoding as pos_encoding
 from exit.utils import cosine_schedule, uniform, top_k, gumbel_sample, top_p
 from einops import rearrange
 from exit.utils import get_model, generate_src_mask
-from transformers import ModernBertModel
+try:
+    from transformers import ModernBertModel
+except ImportError:
+    ModernBertModel = None
 
 
 class PatchUpSampling(nn.Module):
@@ -198,6 +201,8 @@ class Text2Motion_Transformer_New(nn.Module):
                 fc_rate=4):
         super().__init__()
         # ModernBERT
+        if ModernBertModel is None:
+            raise ImportError("Text2Motion_Transformer_New requires transformers with ModernBertModel support.")
         model_name = 'answerdotai/modernbert-base'
         modernbert = ModernBertModel.from_pretrained(model_name).half()  # float16
         modernbert.eval()
