@@ -57,6 +57,10 @@ def get_args_parser():
                         help="cross-attention layers for train_bitm_5_dualbranch: all, none, odd, even, half, firstN, lastN, or comma-separated 0-based indices")
     parser.add_argument("--dualbranch-motion-layers", type=int, default=0,
                         help="scratch motion BERT layers for train_bitm_5_dualbranch; 0 means match text BERT")
+    parser.add_argument("--textonly-mask-prob", default=[0.0, 1.0], nargs=2, type=float,
+                        help="lower/upper text mask probability for train_bitm_3_textonly")
+    parser.add_argument("--textonly-num-workers", type=int, default=8,
+                        help="dataloader workers for train_bitm_3_textonly")
     parser.add_argument("--llada-name", type=str, default='GSAI-ML/LLaDA-8B-Base',
                         help="LLaDA checkpoint used by train_bitm_6")
     parser.add_argument("--min-batch-per-gpu", type=int, default=32,

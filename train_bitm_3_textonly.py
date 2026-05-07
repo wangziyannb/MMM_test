@@ -65,6 +65,9 @@ class CaptionOnlyDataset(Dataset):
 ##### ---- Exp dirs ---- #####
 args = option_trans.get_args_parser()
 torch.manual_seed(args.seed)
+text_mask_probs = tuple(args.textonly_mask_prob)
+if len(text_mask_probs) != 2 or text_mask_probs[0] < 0 or text_mask_probs[1] > 1 or text_mask_probs[0] > text_mask_probs[1]:
+    raise ValueError("--textonly-mask-prob must be two values in [0, 1] with lower <= upper.")
 
 init_save_folder(args)
 os.makedirs(args.out_dir, exist_ok=True)
@@ -73,6 +76,12 @@ os.makedirs(args.out_dir, exist_ok=True)
 logger = utils_model.get_logger(args.out_dir)
 writer = SummaryWriter(args.out_dir)
 logger.info(json.dumps(vars(args), indent=4, sort_keys=True))
+logger.info(
+    f"Text-only mode ignores motion/VQ-only args including "
+    f"vq_name={args.vq_name}, block_size={args.block_size}, nb_code={args.nb_code}, "
+    f"motion_encoder_layers={args.motion_encoder_layers}, motion_decoder_layers={args.motion_decoder_layers}."
+)
+logger.info(f"Text-only mask probability range: {text_mask_probs}.")
 
 ##### ---- BERT MLM ---- #####
 bert_name = 'google-bert/bert-large-uncased'
@@ -121,15 +130,15 @@ train_loader = DataLoader(
     CaptionOnlyDataset(args.dataname, split='train'),
     batch_size=args.batch_size,
     shuffle=True,
-    num_workers=8,
+    num_workers=args.textonly_num_workers,
     drop_last=True
 )
 train_loader_iter = dataset_TM_train.cycle(train_loader)
 val_loader = DataLoader(
     CaptionOnlyDataset(args.dataname, split='val'),
-    batch_size=args.batch_size,
+    batch_size=args.eval_batch_size,
     shuffle=False,
-    num_workers=8,
+    num_workers=args.textonly_num_workers,
     drop_last=False
 )
 
@@ -275,4 +284,4 @@ def train(mask_probs=(0, 1)):
                 logger.info(f"Best text checkpoint updated at iter {nb_iter} with val loss {best_val_loss:.6f}.")
 
 
-train(mask_probs=(0, 1))
+train(mask_probs=text_mask_probs)
