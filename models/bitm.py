@@ -397,6 +397,7 @@ class BiTMDualBranchBERTStrictAR(nn.Module):
         motion_config.num_hidden_layers = num_motion_layers
         motion_config.hidden_dropout_prob = dropout_rate
         motion_config.attention_probs_dropout_prob = dropout_rate
+        motion_config._attn_implementation = getattr(text_config, "_attn_implementation", None) or "eager"
 
         self.text_layers = self.text_bert.encoder.layer
         self.motion_layers = nn.ModuleList([BertLayer(motion_config) for _ in range(num_motion_layers)])
@@ -487,14 +488,11 @@ class BiTMDualBranchBERTStrictAR(nn.Module):
             self.text_bert.eval()
         return self
 
-    def _branch_dtype(self):
-        return next(self.parameters()).dtype
-
-    def _extended_mask(self, mask):
+    def _extended_mask(self, mask, dtype):
         return self.text_bert.get_extended_attention_mask(
             mask,
             mask.shape,
-            dtype=self._branch_dtype()
+            dtype=dtype
         )
 
     def _causal_text_mask(self, text_mask):
@@ -526,8 +524,8 @@ class BiTMDualBranchBERTStrictAR(nn.Module):
     def _run_dual_layers(self, text_hidden, motion_hidden, text_mask, motion_mask, causal_text=False,
                          update_motion_from_text=True):
         text_attention_mask = self._causal_text_mask(text_mask) if causal_text else text_mask
-        text_attention_mask = self._extended_mask(text_attention_mask)
-        motion_attention_mask = self._extended_mask(motion_mask)
+        text_attention_mask = self._extended_mask(text_attention_mask, text_hidden.dtype)
+        motion_attention_mask = self._extended_mask(motion_mask, motion_hidden.dtype)
 
         for layer_idx in range(self.num_dual_layers):
             if layer_idx < len(self.text_layers):
@@ -561,7 +559,7 @@ class BiTMDualBranchBERTStrictAR(nn.Module):
 
     def forward_motion_only(self, motion_ids, motion_mask):
         motion_hidden = self._motion_embeddings(motion_ids, motion_mask)
-        motion_attention_mask = self._extended_mask(motion_mask)
+        motion_attention_mask = self._extended_mask(motion_mask, motion_hidden.dtype)
         for motion_layer in self.motion_layers:
             motion_hidden = motion_layer(motion_hidden, attention_mask=motion_attention_mask)[0]
         motion_logits = self.motion_decoder(motion_hidden, motion_mask)
